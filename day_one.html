@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hanukkah 2024 :)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+    <script src="authenticate.js" defer></script>
+</head>
+<body class="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 min-h-screen flex items-center justify-center font-sans">
+    <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg text-center">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800">Happy Hanukkah, Alice :)</h1>
+        <p class="text-gray-600 mb-4">Can you crack the code? Enter the password to continue:</p>
+        <form id="password-form" class="space-y-4">
+            <input 
+                id="password" 
+                type="password" 
+                placeholder="Enter the password" 
+                class="w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring focus:ring-blue-300"
+                required
+            />
+            <button 
+                id="submit-button" 
+                type="submit" 
+                class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-300"
+            >
+                Submit
+            </button>
+        </form>
+        <div id="message" class="mt-4 text-red-500 font-medium"></div>
+        <div id="countdown" class="mt-2 text-gray-500"></div>
+    </div>
+</body>
+</html>
