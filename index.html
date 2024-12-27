@@ -2,34 +2,172 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hanukkah 2024 :)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
-    <script src="authenticate.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            gap: 0;
+            margin: 10px auto;
+            width: 400px;
+            border: 2px solid #333;
+        }
+        .square {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .queen {
+            width: 40px;
+            height: 40px;
+        }
+        .highlight {
+            background-color: red !important;
+        }
+        .highlight-correct {
+            background-color: green !important;
+        }
+    </style>
 </head>
 <body class="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 min-h-screen flex items-center justify-center font-sans">
-    <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg text-center">
+    <div class="bg-white rounded-xl shadow-lg py-10 px-8 w-full max-w-lg text-center my-8">
         <h1 class="text-3xl font-bold mb-6 text-gray-800">Happy Hanukkah, Alice :)</h1>
-        <p class="text-gray-600 mb-4">Can you crack the code? Enter the password to continue:</p>
-        <form id="password-form" class="space-y-4">
-            <input 
-                id="password" 
-                type="password" 
-                placeholder="Enter the password" 
-                class="w-full px-4 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring focus:ring-blue-300"
-                required
-            />
-            <button 
-                id="submit-button" 
-                type="submit" 
-                class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-300"
-            >
-                Submit
-            </button>
-        </form>
+        <p class="text-gray-600 mb-4">Place 8 queens on the board such that no two queens attack each other.</p>
+        <p class="text-gray-600 mb-4">Fun fact: this has been a toy problem in AI research for decades - the number of possibilities is 2, 10, 4, 40, 92, 352, 724 for board sizes 4x4 to 10x10.</p>
+        <div id="board" class="board mx-auto mt-8"></div>
+        <button id="clearButton" class="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600">Clear</button>
         <div id="message" class="mt-4 text-red-500 font-medium"></div>
-        <div id="countdown" class="mt-2 text-gray-500"></div>
+        <div id="success" class="mt-4 text-green-500 font-bold hidden"></div>
     </div>
+
+    <script>
+        const boardElement = document.getElementById('board');
+        const clearButton = document.getElementById('clearButton');
+        const queens = new Set();
+        const encodedSecret = "cmVhcmRlbi1tZXRhbC1pcy1nb29k"; // don't cheat, my love! 
+
+        // Create the board
+        function createBoard() {
+            boardElement.innerHTML = ''; // Clear existing board
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = 'square';
+                    if ((row + col) % 2 === 0) {
+                        square.style.backgroundColor = "#ecd9b9"; // Light color
+                    } else {
+                        square.style.backgroundColor = "#ae8968"; // Dark color
+                    }
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    square.addEventListener('click', toggleQueen);
+                    boardElement.appendChild(square);
+                }
+            }
+        }
+
+        function toggleQueen(event) {
+            const square = event.currentTarget;
+            const row = parseInt(square.dataset.row, 10);
+            const col = parseInt(square.dataset.col, 10);
+            const position = `${row},${col}`;
+
+            // Toggle queen presence
+            if (queens.has(position)) {
+                queens.delete(position);
+                square.innerHTML = '';
+                square.classList.remove('highlight', 'highlight-correct');
+            } else {
+                if (queens.size < 8) {
+                    queens.add(position);
+                    square.innerHTML = '<img src="img/chesspieces/wikipedia/wQ.png" alt="Queen" class="queen">';
+                }
+            }
+
+            // Verify the positions immediately
+            verifyQueens();
+        }
+
+        function verifyQueens() {
+            clearHighlights();
+            let attackedQueens = new Set();
+
+            const queenPositions = Array.from(queens).map(pos => pos.split(',').map(Number));
+
+            // Check for attacking queens
+            for (let i = 0; i < queenPositions.length; i++) {
+                const [row1, col1] = queenPositions[i];
+                for (let j = i + 1; j < queenPositions.length; j++) {
+                    const [row2, col2] = queenPositions[j];
+                    if (row1 === row2 || col1 === col2 || Math.abs(row1 - row2) === Math.abs(col1 - col2)) {
+                        attackedQueens.add(`${row1},${col1}`);
+                        attackedQueens.add(`${row2},${col2}`);
+                    }
+                }
+            }
+
+            // Highlight attacked queens
+            attackedQueens.forEach(position => {
+                const [row, col] = position.split(',').map(Number);
+                const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+                square.classList.add('highlight');
+            });
+
+            // Display message
+            if (attackedQueens.size > 0) {
+                document.getElementById('message').innerText = 'Some queens are attacking each other!';
+                document.getElementById('success').classList.add('hidden');
+                document.getElementById('success').innerText = '';
+            } else if (queens.size === 8) {
+                // All queens are placed and none are attacking
+                highlightAllQueensCorrect();
+                revealSecret();
+            } else {
+                document.getElementById('message').innerText = '';
+                document.getElementById('success').classList.add('hidden');
+                document.getElementById('success').innerText = '';
+            }
+        }
+
+        function highlightAllQueensCorrect() {
+            queens.forEach(position => {
+                const [row, col] = position.split(',').map(Number);
+                const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+                square.classList.add('highlight-correct');
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.square').forEach(square => {
+                square.classList.remove('highlight', 'highlight-correct');
+            });
+        }
+
+        function revealSecret() {
+            const secret = atob(encodedSecret);
+            document.getElementById('success').innerText = `Congratulations! The secret is: ${secret}`;
+            document.getElementById('success').classList.remove('hidden');
+        }
+
+        function clearBoard() {
+            queens.clear();
+            createBoard();
+            clearHighlights();
+            document.getElementById('message').innerText = '';
+            document.getElementById('success').classList.add('hidden');
+            document.getElementById('success').innerText = '';
+        }
+
+        // Event listener for clear button
+        clearButton.addEventListener('click', clearBoard);
+
+        // Initialize the board
+        createBoard();
+    </script>
 </body>
 </html>
