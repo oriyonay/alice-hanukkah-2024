@@ -4,170 +4,323 @@
     <meta charset="UTF-8">
     <title>Hanukkah 2024 :)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
     <style>
-        .board {
+        .grid {
             display: grid;
-            grid-template-columns: repeat(8, 50px);
+            grid-template-columns: repeat(9, 20px);
+            grid-template-rows: repeat(9, 20px);
             gap: 0;
-            margin: 10px auto;
-            width: 400px;
-            border: 2px solid #333;
+            margin: 20px auto;
+            position: relative;
         }
-        .square {
-            width: 50px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
+        .node {
+            width: 20px;
+            height: 20px;
+            background-color: #555;
+            border-radius: 50%;
+            grid-column: span 1;
+            grid-row: span 1;
+            z-index: 2;
         }
-        .queen {
-            width: 40px;
-            height: 40px;
+        .edge {
+            width: 20px;
+            height: 2px;
+            background-color: #ccc;
+            grid-column: span 1;
+            grid-row: span 1;
+            z-index: 1;
         }
-        .highlight {
-            background-color: red !important;
+        .edge.vertical {
+            width: 2px;
+            height: 20px;
         }
-        .highlight-correct {
-            background-color: green !important;
+        .edge.highlighted {
+            background-color: #ff0000; /* Changed to red */
+        }
+        .mover {
+            width: 24px;
+            height: 24px;
+            background-color: #ff0000;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-2px, -2px);
+            z-index: 3;
+        }
+        .debt-counter {
+            font-size: 24px;
+            margin-top: 10px;
+        }
+        .debt-counter.positive {
+            color: green;
+        }
+        .debt-counter.negative {
+            color: red;
+        }
+        .label {
+            position: absolute;
+            font-size: 12px;
+            color: #fff;
+            transform: translate(-6px, -24px);
         }
     </style>
 </head>
 <body class="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 min-h-screen flex items-center justify-center font-sans">
-    <div class="bg-white rounded-xl shadow-lg py-10 px-8 w-full max-w-lg text-center my-8">
+    <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg text-center">
         <h1 class="text-3xl font-bold mb-6 text-gray-800">Happy Hanukkah, Alice :)</h1>
-        <p class="text-gray-600 mb-4">Place 8 queens on the board such that no two queens attack each other.</p>
-        <p class="text-gray-600 mb-4">Fun fact: this has been a toy problem in AI research for decades - the number of possibilities is 2, 10, 4, 40, 92, 352, 724 for board sizes 4x4 to 10x10.</p>
-        <div id="board" class="board mx-auto mt-8"></div>
-        <button id="clearButton" class="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600">Clear</button>
+        <p class="text-gray-600 mb-4">
+            Moses has just led the Israelites out of Egypt and needs to reach Canaan! You (Moses) have to get from Egypt (top-left corner) to Canaan (bottom-right corner) without incurring any debt. The movement rules are:
+        </p>
+        <ul class="text-gray-600 mb-4 text-left list-disc list-inside">
+            <li>Moving east (right) decreases your credit by 2 shekels.</li>
+            <li>Moving west (left) increases your credit by 2 shekels.</li>
+            <li>Moving south (down) doubles your current credit/debt.</li>
+            <li>Moving north (up) halves your current credit/debt.</li>
+            <li>You cannot cross the same edge twice.</li>
+        </ul>
+        <p class="text-gray-600 mb-4">
+            You have already moved twice to the right, so you start at a credit of -4 shekels. Help Moses reach Canaan with zero or positive credit!
+        </p>
+        <div id="grid" class="grid"></div>
+        <div id="debt-counter" class="debt-counter"></div>
+        <button id="reset-button" class="mt-4 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600">Clear Path</button>
         <div id="message" class="mt-4 text-red-500 font-medium"></div>
-        <div id="success" class="mt-4 text-green-500 font-bold hidden"></div>
+        <div id="secret-message" class="mt-4 text-green-500 font-bold hidden"></div>
     </div>
 
     <script>
-        const boardElement = document.getElementById('board');
-        const clearButton = document.getElementById('clearButton');
-        const queens = new Set();
-        const encodedSecret = "cmVhcmRlbi1tZXRhbC1pcy1nb29k"; // don't cheat, my love! 
+        const gridElement = document.getElementById('grid');
+        const debtCounterElement = document.getElementById('debt-counter');
+        const resetButton = document.getElementById('reset-button');
+        const messageElement = document.getElementById('message');
+        const secretMessageElement = document.getElementById('secret-message');
+        const encodedSecret = "YS1oYW1zdGVyLW5hbWVkLXNwb3Jr"; // don't cheat!
 
-        // Create the board
-        function createBoard() {
-            boardElement.innerHTML = ''; // Clear existing board
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const square = document.createElement('div');
-                    square.className = 'square';
-                    if ((row + col) % 2 === 0) {
-                        square.style.backgroundColor = "#ecd9b9"; // Light color
-                    } else {
-                        square.style.backgroundColor = "#ae8968"; // Dark color
+        const gridSize = 5;
+        const nodeSize = 20;
+        const startX = 2;
+        const startY = 0;
+        const goalX = 4;
+        const goalY = 4;
+        let debt = -4; // Starting credit is -4
+        let currentPosition = { x: startX, y: startY };
+        let visitedEdges = new Set([
+            '0,0-1,0',
+            '1,0-0,0',
+            '1,0-2,0',
+            '2,0-1,0'
+        ]);
+        let gameOver = false;
+
+        // Initialize the grid
+        function createGrid() {
+            gridElement.innerHTML = '';
+            gridElement.style.width = `${(nodeSize * 2) * gridSize}px`;
+            gridElement.style.height = `${(nodeSize * 2) * gridSize}px`;
+
+            // Create nodes and edges
+            for (let y = 0; y < gridSize * 2 - 1; y++) {
+                for (let x = 0; x < gridSize * 2 - 1; x++) {
+                    if (y % 2 === 0 && x % 2 === 0) {
+                        // Nodes
+                        const node = document.createElement('div');
+                        node.className = 'node';
+                        node.style.gridRowStart = y + 1;
+                        node.style.gridColumnStart = x + 1;
+
+                        // Label start and goal nodes
+                        if (x / 2 === 0 && y / 2 === 0) {
+                            const label = document.createElement('div');
+                            label.className = 'label';
+                            label.innerText = 'Egypt';
+                            node.appendChild(label);
+                        }
+                        if (x / 2 === goalX && y / 2 === goalY) {
+                            const label = document.createElement('div');
+                            label.className = 'label';
+                            label.innerText = 'Canaan';
+                            node.appendChild(label);
+                        }
+
+                        gridElement.appendChild(node);
+                    } else if (y % 2 === 0 || x % 2 === 0) {
+                        // Edges
+                        const edge = document.createElement('div');
+                        edge.className = 'edge';
+                        edge.style.gridRowStart = y + 1;
+                        edge.style.gridColumnStart = x + 1;
+
+                        if (x % 2 === 0) {
+                            edge.classList.add('vertical');
+                        }
+
+                        edge.dataset.x = Math.floor(x / 2);
+                        edge.dataset.y = Math.floor(y / 2);
+                        edge.dataset.direction = (x % 2 === 1) ? 'horizontal' : 'vertical';
+
+                        gridElement.appendChild(edge);
                     }
-                    square.dataset.row = row;
-                    square.dataset.col = col;
-                    square.addEventListener('click', toggleQueen);
-                    boardElement.appendChild(square);
                 }
             }
+
+            // Highlight initial edges
+            visitedEdges.forEach(edgeKey => {
+                highlightEdge(edgeKey);
+            });
+
+            // Place the mover
+            placeMover();
+            updateDebtCounter();
         }
 
-        function toggleQueen(event) {
-            const square = event.currentTarget;
-            const row = parseInt(square.dataset.row, 10);
-            const col = parseInt(square.dataset.col, 10);
-            const position = `${row},${col}`;
+        function placeMover() {
+            const mover = document.createElement('div');
+            mover.className = 'mover';
+            const posX = currentPosition.x * (nodeSize * 2);
+            const posY = currentPosition.y * (nodeSize * 2);
+            mover.style.left = `${posX}px`;
+            mover.style.top = `${posY}px`;
+            gridElement.appendChild(mover);
+        }
 
-            // Toggle queen presence
-            if (queens.has(position)) {
-                queens.delete(position);
-                square.innerHTML = '';
-                square.classList.remove('highlight', 'highlight-correct');
+        // Handle key presses
+        document.addEventListener('keydown', handleKeyPress);
+
+        function handleKeyPress(event) {
+            if (gameOver) return;
+
+            const key = event.key;
+            let dx = 0;
+            let dy = 0;
+
+            if (key === 'ArrowUp') {
+                dy = -1;
+            } else if (key === 'ArrowDown') {
+                dy = 1;
+            } else if (key === 'ArrowLeft') {
+                dx = -1;
+            } else if (key === 'ArrowRight') {
+                dx = 1;
             } else {
-                if (queens.size < 8) {
-                    queens.add(position);
-                    square.innerHTML = '<img src="img/chesspieces/wikipedia/wQ.png" alt="Queen" class="queen">';
-                }
+                return; // Ignore other keys
             }
 
-            // Verify the positions immediately
-            verifyQueens();
+            moveToPosition(currentPosition.x + dx, currentPosition.y + dy);
         }
 
-        function verifyQueens() {
-            clearHighlights();
-            let attackedQueens = new Set();
+        function moveToPosition(x, y) {
+            const maxIndex = gridSize - 1;
 
-            const queenPositions = Array.from(queens).map(pos => pos.split(',').map(Number));
+            // Check if the move is within bounds
+            if (x < 0 || x > maxIndex || y < 0 || y > maxIndex) return;
 
-            // Check for attacking queens
-            for (let i = 0; i < queenPositions.length; i++) {
-                const [row1, col1] = queenPositions[i];
-                for (let j = i + 1; j < queenPositions.length; j++) {
-                    const [row2, col2] = queenPositions[j];
-                    if (row1 === row2 || col1 === col2 || Math.abs(row1 - row2) === Math.abs(col1 - col2)) {
-                        attackedQueens.add(`${row1},${col1}`);
-                        attackedQueens.add(`${row2},${col2}`);
-                    }
-                }
+            // Cannot move left from starting position
+            if (currentPosition.x === startX && currentPosition.y === startY && x < currentPosition.x) return;
+
+            // Calculate the edge key
+            const edgeKey = `${currentPosition.x},${currentPosition.y}-${x},${y}`;
+            const reverseEdgeKey = `${x},${y}-${currentPosition.x},${currentPosition.y}`;
+
+            // Cannot cross the same edge twice
+            if (visitedEdges.has(edgeKey) || visitedEdges.has(reverseEdgeKey)) return;
+
+            // Update debt/credit based on movement
+            if (x > currentPosition.x) { // Moving right (East)
+                debt -= 2; // Decreases credit by 2 (increases debt)
+            } else if (x < currentPosition.x) { // Moving left (West)
+                debt += 2; // Increases credit by 2 (decreases debt)
+            } else if (y > currentPosition.y) { // Moving down (South)
+                debt *= 2; // Doubles debt/credit
+            } else if (y < currentPosition.y) { // Moving up (North)
+                debt /= 2; // Halves debt/credit
             }
 
-            // Highlight attacked queens
-            attackedQueens.forEach(position => {
-                const [row, col] = position.split(',').map(Number);
-                const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
-                square.classList.add('highlight');
+            // Round debt to handle potential floating-point issues
+            debt = Math.round(debt);
+
+            // Mark the edge as visited
+            visitedEdges.add(edgeKey);
+
+            // Highlight the edge
+            highlightEdge(edgeKey);
+
+            // Update current position
+            currentPosition = { x, y };
+
+            // Update mover position
+            updateMover();
+
+            // Check if reached goal
+            if (currentPosition.x === goalX && currentPosition.y === goalY) {
+                checkWinCondition();
+            }
+
+            updateDebtCounter();
+        }
+
+        function highlightEdge(edgeKey) {
+            const [from, to] = edgeKey.split('-');
+            const [x1, y1] = from.split(',').map(Number);
+            const [x2, y2] = to.split(',').map(Number);
+
+            const edgeX = (x1 + x2);
+            const edgeY = (y1 + y2);
+
+            const edge = Array.from(document.getElementsByClassName('edge')).find(e => {
+                return parseInt(e.style.gridColumnStart) === edgeX + 1 &&
+                       parseInt(e.style.gridRowStart) === edgeY + 1;
             });
 
-            // Display message
-            if (attackedQueens.size > 0) {
-                document.getElementById('message').innerText = 'Some queens are attacking each other!';
-                document.getElementById('success').classList.add('hidden');
-                document.getElementById('success').innerText = '';
-            } else if (queens.size === 8) {
-                // All queens are placed and none are attacking
-                highlightAllQueensCorrect();
-                revealSecret();
+            if (edge) {
+                edge.classList.add('highlighted');
+            }
+        }
+
+        function updateMover() {
+            const mover = document.querySelector('.mover');
+            const posX = currentPosition.x * (nodeSize * 2);
+            const posY = currentPosition.y * (nodeSize * 2);
+            mover.style.left = `${posX}px`;
+            mover.style.top = `${posY}px`;
+        }
+
+        function updateDebtCounter() {
+            const formattedDebt = debt >= 0 ? `+${debt}` : `-${Math.abs(debt)}`;
+            debtCounterElement.innerText = `Credit: ${formattedDebt}`;
+            debtCounterElement.className = 'debt-counter ' + (debt >= 0 ? 'positive' : 'negative');
+        }
+
+        function checkWinCondition() {
+            gameOver = true;
+            if (debt >= 0) {
+                const secret = atob(encodedSecret);
+                secretMessageElement.innerText = `Congratulations! The secret is: ${secret}`;
+                secretMessageElement.classList.remove('hidden');
+                messageElement.innerText = '';
             } else {
-                document.getElementById('message').innerText = '';
-                document.getElementById('success').classList.add('hidden');
-                document.getElementById('success').innerText = '';
+                messageElement.innerText = 'You arrived with debt! Try again.';
             }
         }
 
-        function highlightAllQueensCorrect() {
-            queens.forEach(position => {
-                const [row, col] = position.split(',').map(Number);
-                const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
-                square.classList.add('highlight-correct');
-            });
+        function resetGame() {
+            debt = -4;
+            currentPosition = { x: startX, y: startY };
+            visitedEdges = new Set([
+                '0,0-1,0',
+                '1,0-0,0',
+                '1,0-2,0',
+                '2,0-1,0'
+            ]);
+            gameOver = false;
+            messageElement.innerText = '';
+            secretMessageElement.innerText = '';
+            secretMessageElement.classList.add('hidden');
+            createGrid();
         }
 
-        function clearHighlights() {
-            document.querySelectorAll('.square').forEach(square => {
-                square.classList.remove('highlight', 'highlight-correct');
-            });
-        }
-
-        function revealSecret() {
-            const secret = atob(encodedSecret);
-            document.getElementById('success').innerText = `Congratulations! The secret is: ${secret}`;
-            document.getElementById('success').classList.remove('hidden');
-        }
-
-        function clearBoard() {
-            queens.clear();
-            createBoard();
-            clearHighlights();
-            document.getElementById('message').innerText = '';
-            document.getElementById('success').classList.add('hidden');
-            document.getElementById('success').innerText = '';
-        }
-
-        // Event listener for clear button
-        clearButton.addEventListener('click', clearBoard);
-
-        // Initialize the board
-        createBoard();
+        // Initialize
+        resetButton.addEventListener('click', resetGame);
+        createGrid();
     </script>
 </body>
 </html>
